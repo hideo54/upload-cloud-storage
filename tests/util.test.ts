@@ -14,26 +14,198 @@
  * limitations under the License.
  */
 
-import { expect } from 'chai';
 import 'mocha';
-import { getFiles } from '../src/util';
-import { FILES_IN_DIR } from './constants.test';
+import { expect } from 'chai';
+
+import { getDestinationFromPath } from '../src/util';
 
 /**
- * Unit Test getFiles method in utils.
+ * Unit Test getDestinationFromPath method in utils.
  */
-describe('Unit Test getFiles', function() {
-  it('gets single file in a directory', async function() {
-    const singleFileDir = 'tests/testdata/nested1/nested2';
-    const singleFileName = 'test3.txt';
-    const files = await getFiles(singleFileDir);
-    expect(files.length).eq(1);
-    expect(files[0]).eq(`${singleFileDir}/${singleFileName}`);
-  });
-  it('recursively walks directory', async function() {
-    const multiFileDir = 'tests/testdata/';
-    const files = await getFiles(multiFileDir);
-    expect(files.length).eq(FILES_IN_DIR.length);
-    expect(files).to.have.members(FILES_IN_DIR);
+describe('Unit Test getDestinationFromPath', function () {
+  const cases = [
+    {
+      name: 'returns correct destination for a file',
+      input: {
+        filePath: 'foo/bar.txt',
+        directory: 'foo',
+        parent: true,
+        prefix: '',
+      },
+      output: 'foo/bar.txt',
+    },
+    {
+      name: 'returns correct destination for a file within dir',
+      input: {
+        filePath: 'foo/bar/bar.txt',
+        directory: 'foo',
+        parent: true,
+        prefix: '',
+      },
+      output: 'foo/bar/bar.txt',
+    },
+    {
+      name: 'returns correct destination for a file with two dirs in path',
+      input: {
+        filePath: 'foo/bar/bar.txt',
+        directory: 'foo/bar',
+        parent: true,
+        prefix: '',
+      },
+      output: 'foo/bar/bar.txt',
+    },
+    {
+      name: 'returns correct destination for a file with prefix',
+      input: {
+        filePath: 'foo/bar.txt',
+        directory: 'foo',
+        parent: true,
+        prefix: 'prfx',
+      },
+      output: 'prfx/foo/bar.txt',
+    },
+    {
+      name: 'returns correct destination for a file with two prefixes',
+      input: {
+        filePath: 'foo/bar.txt',
+        directory: 'foo',
+        parent: true,
+        prefix: 'prfx1/prfx2',
+      },
+      output: 'prfx1/prfx2/foo/bar.txt',
+    },
+    {
+      name: 'returns correct destination for a file with relative path with two prefixes',
+      input: {
+        filePath: './foo/bar.txt',
+        directory: 'foo',
+        parent: true,
+        prefix: 'prfx1/prfx2',
+      },
+      output: 'prfx1/prfx2/foo/bar.txt',
+    },
+    {
+      name: 'returns correct destination for a file without parent',
+      input: {
+        filePath: 'foo/bar.txt',
+        directory: 'foo',
+        parent: false,
+        prefix: '',
+      },
+      output: 'bar.txt',
+    },
+    {
+      name: 'returns correct destination for a file without parent within dir',
+      input: {
+        filePath: 'foo/bar/bar.txt',
+        directory: 'foo',
+        parent: false,
+        prefix: '',
+      },
+      output: 'bar/bar.txt',
+    },
+    {
+      name: 'returns correct destination for a file without parent with two dirs in path',
+      input: {
+        filePath: 'foo/bar/bar.txt',
+        directory: 'foo/bar',
+        parent: false,
+        prefix: '',
+      },
+      output: 'bar.txt',
+    },
+    {
+      name: 'returns correct destination for a file with relative path without parent with two dirs in path',
+      input: {
+        filePath: './foo/bar/bar.txt',
+        directory: 'foo/bar',
+        parent: false,
+        prefix: '',
+      },
+      output: 'bar.txt',
+    },
+    {
+      name: 'returns correct destination for a file without parent with prefix',
+      input: {
+        filePath: 'foo/bar.txt',
+        directory: 'foo',
+        parent: false,
+        prefix: 'prfx',
+      },
+      output: 'prfx/bar.txt',
+    },
+    {
+      name: 'returns correct destination for a file without parent with two prefixes',
+      input: {
+        filePath: 'foo/bar.txt',
+        directory: 'foo',
+        parent: false,
+        prefix: 'prfx1/prfx2',
+      },
+      output: 'prfx1/prfx2/bar.txt',
+    },
+    {
+      name: 'returns correct destination for a file with relative path without parent with two prefixes',
+      input: {
+        filePath: './foo/bar.txt',
+        directory: 'foo',
+        parent: false,
+        prefix: 'prfx1/prfx2',
+      },
+      output: 'prfx1/prfx2/bar.txt',
+    },
+    {
+      name: 'returns correct destination for a file without parent with absolute filepath',
+      input: {
+        filePath: '/foo/bar.txt',
+        directory: 'foo',
+        parent: false,
+        prefix: '',
+      },
+      output: 'bar.txt',
+    },
+    {
+      name: 'returns correct destination for a file with relative path without parent with two prefixes with absolute filepath',
+      input: {
+        filePath: '/foo/bar.txt',
+        directory: 'foo',
+        parent: false,
+        prefix: 'prfx1/prfx2',
+      },
+      output: 'prfx1/prfx2/bar.txt',
+    },
+    {
+      name: 'returns correct destination for a file with relative path without parent with two dirs in path with absolute filepath',
+      input: {
+        filePath: '/foo/bar/bar.txt',
+        directory: 'foo/bar',
+        parent: false,
+        prefix: '',
+      },
+      output: 'bar.txt',
+    },
+    {
+      name: 'returns correct destination for a file without parent within dir with absolute filepath',
+      input: {
+        filePath: '/foo/bar/bar.txt',
+        directory: 'foo',
+        parent: false,
+        prefix: '',
+      },
+      output: 'bar/bar.txt',
+    },
+  ];
+
+  cases.forEach((tc) => {
+    it(tc.name, async function () {
+      const { filePath, directory, parent, prefix } = tc.input;
+      const destination = await getDestinationFromPath(
+        filePath,
+        directory,
+        parent,
+        prefix,
+      );
+      expect(destination).eq(tc.output);
+    });
   });
 });

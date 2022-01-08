@@ -15,13 +15,25 @@
  */
 
 import * as fs from 'fs';
-import { UploadHelper } from './upload-helper';
+import * as path from 'path';
+
 import {
   Storage,
   UploadResponse,
   StorageOptions,
   PredefinedAcl,
 } from '@google-cloud/storage';
+import { parseCredential } from '@google-github-actions/actions-utils';
+
+import { UploadHelper } from './upload-helper';
+import { Metadata } from './headers';
+
+// Do not listen to the linter - this can NOT be rewritten as an ES6 import statement.
+// eslint-disable-next-line @typescript-eslint/no-var-requires
+const { version: appVersion } = require('../package.json');
+
+// userAgent is the default user agent.
+const userAgent = `google-github-actions:upload-cloud-storage/${appVersion}`;
 
 /**
  * Available options to create the client.
@@ -41,35 +53,38 @@ type ClientOptions = {
  */
 export class Client {
   readonly storage: Storage;
+
   constructor(opts?: ClientOptions) {
-    const options: StorageOptions = {
-      userAgent: 'github-actions-upload-cloud-storage/0.2.0',
-    };
+    const options: StorageOptions = { userAgent: userAgent };
+
     if (opts?.credentials) {
-      // If the credentials are not JSON, they are probably base64-encoded. Even
-      // though we don't instruct users to provide base64-encoded credentials,
-      // sometimes they still do.
-      if (!opts.credentials.trim().startsWith('{')) {
-        const creds = opts.credentials;
-        opts.credentials = Buffer.from(creds, 'base64').toString('utf8');
-      }
-      const creds = JSON.parse(opts.credentials);
-      options.credentials = creds;
+      options.credentials = parseCredential(opts.credentials);
     }
     this.storage = new Storage(options);
   }
+
   /**
    * Invokes GCS Helper for uploading file or directory.
-   * @param bucketName Name of bucket to upload file/dir.
-   * @param path Path of the file/dir to upload.
-   * @param prefix Optional prefix when uploading to GCS.
+   * @param destination Name of bucket and optional prefix to upload file/dir.
+   * @param filePath FilePath of the file/dir to upload.
+   * @param glob Glob pattern if any.
+   * @param gzip Gzip files on upload.
+   * @param resumable Allow resuming uploads.
+   * @param parent Flag to enable parent dir in destination path.
+   * @param predefinedAcl Predefined ACL config.
+   * @param concurrency Number of files to simultaneously upload.
    * @returns List of uploaded file(s).
    */
   async upload(
     destination: string,
-    path: string,
-    gzip: boolean,
+    filePath: string,
+    glob = '',
+    gzip = true,
+    resumable = true,
+    parent = true,
     predefinedAcl?: PredefinedAcl,
+    concurrency = 100,
+    metadata?: Metadata,
   ): Promise<UploadResponse[]> {
     let bucketName = destination;
     let prefix = '';
@@ -80,24 +95,36 @@ export class Client {
       prefix = destination.substring(idx + 1);
     }
 
-    const stat = await fs.promises.stat(path);
+    const stat = await fs.promises.stat(filePath);
     const uploader = new UploadHelper(this.storage);
     if (stat.isFile()) {
+      destination = '';
+      // If obj prefix is set, then extract filename and append to prefix to create destination
+      if (prefix) {
+        destination = path.posix.join(prefix, path.posix.basename(filePath));
+      }
       const uploadedFile = await uploader.uploadFile(
         bucketName,
-        path,
+        filePath,
         gzip,
-        prefix,
+        resumable,
+        destination,
         predefinedAcl,
+        metadata,
       );
       return [uploadedFile];
     } else {
       const uploadedFiles = await uploader.uploadDirectory(
         bucketName,
-        path,
+        filePath,
+        glob,
         gzip,
+        resumable,
         prefix,
+        parent,
         predefinedAcl,
+        concurrency,
+        metadata,
       );
       return uploadedFiles;
     }
